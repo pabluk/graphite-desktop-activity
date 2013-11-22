@@ -1,0 +1,34 @@
+<html>
+  <head>
+    <title>Desktop Activity</title>
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="data.json"></script>
+    <script type="text/javascript">
+
+      // Load the Visualization API and the piechart package.
+      google.load('visualization', '1.0', {'packages':['corechart']});
+
+      // Set a callback to run when the Google Visualization API is loaded.
+      google.setOnLoadCallback(drawVisualization);
+
+	function drawVisualization() {
+      	  var data = new google.visualization.DataTable(jsonData);
+	  var ac = new google.visualization.AreaChart(document.getElementById('chart_div'));
+	  ac.draw(data, {
+	    title : 'Hourly desktop activity',
+	    isStacked: true,
+	    width: 600,
+	    height: 400,
+	    vAxis: {title: "Activity"},
+	    hAxis: {title: "Hour"}
+	  });
+	}
+    </script>
+  </head>
+
+  <body>
+    <!--Div that will hold the pie chart-->
+    <div id="chart_div"></div>
+  </body>
+</html>

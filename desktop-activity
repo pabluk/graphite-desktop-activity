@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+
+import logging
+
+from gi.repository import Gtk
+from gi.repository import AppIndicator3 as appindicator
+ 
+from listenkbd import ListenKbd
+
+
+logging.basicConfig(filename='activity.log', format='[%(asctime)s] %(levelname)s:%(message)s', level=logging.DEBUG)
+
+class DesktopActivity(Gtk.Window):
+
+    def __init__(self):
+        Gtk.Window.__init__(self)
+        self.logger = logging.getLogger(__name__)
+        self.ind = appindicator.Indicator.new (
+                        "desktop-activity",
+                        "preferences-desktop-keyboard-shortcuts-messages",
+                        appindicator.IndicatorCategory.APPLICATION_STATUS)
+        self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
+
+        menu = Gtk.Menu()
+        menu_item = Gtk.MenuItem("Quit")
+        menu_item.connect("activate", self.quit)
+        menu_item.show()
+        menu.append(menu_item)
+
+        self.ind.set_menu(menu)
+
+        self.listenkbd = ListenKbd()
+        self.listenkbd.start()
+
+
+    def quit(self, widget):
+        self.logger.debug("Quitting...")
+        self.listenkbd.stop()
+        Gtk.main_quit()
+ 
+if __name__ == "__main__":
+    da = DesktopActivity()
+    Gtk.main()
+
+
