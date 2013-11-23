@@ -15,57 +15,50 @@
 import sys
 import time
 import signal
+import socket
 import logging
-from socket import socket
+import threading
 
 from Xlib import X, display
 from Xlib.ext import record
 from Xlib.protocol import rq
 
 
-
 CARBON_SERVER = '127.0.0.1'
 CARBON_PORT = 20030
+SEND_INTERVAL = 60
 
-logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s', level=logging.DEBUG)
+logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s',
+                    level=logging.DEBUG)
 
 
-def main():
-    logger = logging.getLogger(__name__)
-    local_dpy = display.Display()
-    record_dpy = display.Display()
+class RecordActivity(threading.Thread):
+    def __init__(self, counter, logger):
+        threading.Thread.__init__(self)
+        self.counter = counter
+        self.logger = logger
 
-    if not record_dpy.has_extension("RECORD"):
-        logger.error("RECORD extension not found.")
-        sys.exit(1)
+        self.local_dpy = display.Display()
+        self.record_dpy = display.Display()
 
-    ctx = record_dpy.record_create_context(
-            0,
-            [record.AllClients],
-            [{
-                    'core_requests': (0, 0),
-                    'core_replies': (0, 0),
-                    'ext_requests': (0, 0, 0, 0),
-                    'ext_replies': (0, 0, 0, 0),
-                    'delivered_events': (0, 0),
-                    'device_events': (X.KeyPress, X.ButtonPress),
-                    'errors': (0, 0),
-                    'client_started': False,
-                    'client_died': False,
-            }])
+        if not self.record_dpy.has_extension("RECORD"):
+            self.logger.error("RECORD extension not found.")
+            sys.exit(1)
 
-    counters = {
-        'desktop.host1.keyboard': 0,
-        'desktop.host1.mouse': 0,
-    }
-    sock = socket()
-    try:
-        sock.connect((CARBON_SERVER,CARBON_PORT))
-    except:
-        print "Couldn't connect to %(server)s on port %(port)d." % { 'server':CARBON_SERVER, 'port':CARBON_PORT }
-        sys.exit(1)
+        xspecs = [{
+            'core_requests': (0, 0),
+            'core_replies': (0, 0),
+            'ext_requests': (0, 0, 0, 0),
+            'ext_replies': (0, 0, 0, 0),
+            'delivered_events': (0, 0),
+            'device_events': (X.KeyPress, X.ButtonPress),
+            'errors': (0, 0),
+            'client_started': False,
+            'client_died': False,
+        }]
+        self.ctx = self.record_dpy.record_create_context(0, [record.AllClients], xspecs)
 
-    def record_activity(reply):
+    def record_activity(self, reply):
         if reply.category != record.FromServer:
             return
         if reply.client_swapped:
@@ -76,39 +69,85 @@ def main():
             return
         data = reply.data
         while len(data):
-            event, data = rq.EventField(None).parse_binary_value(data,
-                                    record_dpy.display, None, None)
+            ef = rq.EventField(None)
+            event, data = ef.parse_binary_value(data, self.record_dpy.display,
+                                                None, None)
             if event.type == X.KeyPress:
-                logger.debug("Key pressed")
-                counters['desktop.host1.keyboard'] += 1
+                self.logger.debug("Key pressed")
+                self.counter['desktop.host1.keyboard'] += 1
                 return
             if event.type == X.ButtonPress:
-                logger.debug("Mouse button pressed")
-                counters['desktop.host1.mouse'] += 1
+                self.logger.debug("Mouse button pressed")
+                self.counter['desktop.host1.mouse'] += 1
                 return
 
-    def send_data(signal, frame):
+    def run(self):
+        self.logger.debug("Thread started.")
+        self.record_dpy.record_enable_context(self.ctx, self.record_activity)
+
+    def stop(self):
+        self.local_dpy.record_disable_context(self.ctx)
+        self.local_dpy.flush()
+        self.record_dpy.record_free_context(self.ctx)
+        self.logger.debug("Stop record activity.")
+
+
+class SendActivityTimer(threading.Thread):
+    def __init__(self, counter, logger):
+        threading.Thread.__init__(self)
+        self.counter = counter
+        self.logger = logger
+        self.event = threading.Event()
+
+        self.sock = socket.socket()
+        try:
+            self.sock.connect((CARBON_SERVER, CARBON_PORT))
+        except socket.error:
+            self.logger.error("Couldn't connect to %s on port %d."
+                              % (CARBON_SERVER, CARBON_PORT))
+            sys.exit(1)
+
+    def send_data(self):
         timestamp = int(time.time())
         message = ''
-        for metric, value in counters.items():
+        for metric, value in self.counter.items():
             message += '%s %d %d\n' % (metric, value, timestamp)
-        counters['desktop.host1.keyboard'] = 0
-        counters['desktop.host1.mouse'] = 0
-        logger.debug("Sending:\n%s" % message)
-        sock.sendall(message)
+        self.logger.debug("Sending: %s" % self.counter)
+        self.sock.sendall(message)
 
-    def signal_handler(signal, frame):
-        sock.close()
-        local_dpy.record_disable_context(ctx)
-        local_dpy.flush()
-        record_dpy.record_free_context(ctx)
+    def run(self):
+        while not self.event.wait(SEND_INTERVAL):
+            self.send_data()
+
+    def stop(self):
+        self.logger.debug("Stop send activity.")
+        self.event.set()
+
+
+def main():
+    logger = logging.getLogger(__name__)
+
+    counter = {
+        'desktop.host1.keyboard': 0,
+        'desktop.host1.mouse': 0,
+    }
+
+    def shutdown(signal, frame):
+        logger.debug("Shutdown...")
+        thread1.stop()
+        thread2.stop()
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGUSR1, send_data)
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
 
-    record_dpy.record_enable_context(ctx, record_activity)
+    thread1 = RecordActivity(counter, logger)
+    thread2 = SendActivityTimer(counter, logger)
+
+    thread1.start()
+    thread2.start()
+
+    signal.pause()
 
 
 if __name__ == '__main__':
