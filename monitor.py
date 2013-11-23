@@ -29,7 +29,7 @@ CARBON_PORT = 20030
 SEND_INTERVAL = 60
 
 logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s',
-                    level=logging.DEBUG)
+                    level=logging.WARNING)
 
 
 class RecordActivity(threading.Thread):
