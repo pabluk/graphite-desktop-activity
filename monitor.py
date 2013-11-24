@@ -24,8 +24,8 @@ from Xlib.ext import record
 from Xlib.protocol import rq
 
 
-CARBON_SERVER = '127.0.0.1'
-CARBON_PORT = 20030
+CARBON_SERVER = '192.168.1.100'
+CARBON_PORT = 2003
 SEND_INTERVAL = 60
 
 logging.basicConfig(format='[%(asctime)s] %(levelname)s:%(message)s',
