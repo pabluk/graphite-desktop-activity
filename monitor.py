@@ -74,11 +74,11 @@ class RecordActivity(threading.Thread):
                                                 None, None)
             if event.type == X.KeyPress:
                 self.logger.debug("Key pressed")
-                self.counter['desktop.host1.keyboard'] += 1
+                self.counter['keyboard'] += 1
                 return
             if event.type == X.ButtonPress:
                 self.logger.debug("Mouse button pressed")
-                self.counter['desktop.host1.mouse'] += 1
+                self.counter['mouse'] += 1
                 return
 
     def run(self):
@@ -98,6 +98,7 @@ class SendActivityTimer(threading.Thread):
         self.counter = counter
         self.logger = logger
         self.event = threading.Event()
+        self.hostname = socket.gethostname()
 
         self.sock = socket.socket()
         try:
@@ -111,8 +112,8 @@ class SendActivityTimer(threading.Thread):
         timestamp = int(time.time())
         message = ''
         for metric, value in self.counter.items():
-            message += '%s %d %d\n' % (metric, value, timestamp)
-        self.logger.debug("Sending: %s" % self.counter)
+            message += 'desktop.%s.%s %d %d\n' % (self.hostname, metric, value, timestamp)
+        self.logger.info("Sending data: %s" % [message])
         self.sock.sendall(message)
 
     def run(self):
@@ -126,10 +127,9 @@ class SendActivityTimer(threading.Thread):
 
 def main():
     logger = logging.getLogger(__name__)
-
     counter = {
-        'desktop.host1.keyboard': 0,
-        'desktop.host1.mouse': 0,
+        'keyboard': 0,
+        'mouse': 0,
     }
 
     def shutdown(signal, frame):
