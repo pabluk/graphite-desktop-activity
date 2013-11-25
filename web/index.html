@@ -15,19 +15,29 @@
     var metrics = {
     	"zenbook_1": {
 		target: "derivative(desktop.zenbook.*)",
-		title: "Desktop Activity (zenbook)",
+		title: "Desktop activity in the last 2 hours (zenbook)",
 		from: "-2h",
 	},
     	"zenbook_2": {
 		target: "derivative(desktop.zenbook.*)",
-		title: "Desktop Activity (zenbook)",
+		title: "Desktop activity in the last 12 hours (zenbook)",
+		from: "-12h",
+	},
+    	"z930_1": {
+		target: "derivative(desktop.z930.*)",
+		title: "Desktop activity in the last 2 hours (z930)",
+		from: "-2h",
+	},
+    	"z930_2": {
+		target: "derivative(desktop.z930.*)",
+		title: "Desktop activity in the last 12 hours (z930)",
 		from: "-12h",
 	},
     }
     
     function generateURL(metric) {
 	var width = ($(window).innerWidth()/2) - 30;
-	var baseURL = "http://graphite.seminar.io:8080/render.php?";
+	var baseURL = "/render.php?";
 
     	graph = $.extend(metrics[metric], commonOptions);
 	graph.width = width;
@@ -63,7 +73,6 @@
     img1.attr("src", generateURL("zenbook_2"));
     img1.appendTo("#graph2");
 
-    /*
     var img1 = $("<img>");
     img1.attr("src", generateURL("z930_1"));
     img1.appendTo("#graph3");
@@ -71,7 +80,6 @@
     var img1 = $("<img>");
     img1.attr("src", generateURL("z930_2"));
     img1.appendTo("#graph4");
-    */
 
     </script>
   </body>
